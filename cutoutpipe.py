@@ -142,6 +142,36 @@ def loadSelectApdbSources(dbName, diaObjectId, dbType='sqlite', schema=None):
                                   where "diaObjectId" = {1};'.format('"DiaSource"', diaObjectId), connection)
     return srcTable
 
+@deprecated(reason="This method is deprecated and will be removed once the "
+                   "replacement API is in place.", version="v24", category=FutureWarning)
+def loadExposuresV2(butler, dataId, collections, diffName='deep'):
+    """Load a science exposure, difference image, and warped template.
+
+    Parameters
+    ----------
+    butler : `lsst.daf.butler.Butler`
+        Butler in the repository corresponding to the output of an ap_pipe run.
+    dataId : `dict`-like
+        Gen3 data ID specifying at least instrument, visit, and detector.
+    collections : `str` or `list`
+        Gen3 collection or collections from which to load the exposures.
+    diffName : `str`, optional
+        Default is 'deep', but 'goodSeeing' may be needed instead.
+
+    Returns
+    -------
+    science : `lsst.afw.Exposure`
+        calexp corresponding to dataId and collections.
+    difference : `lsst.afw.Exposure`
+        differenceExp corresponding to dataId and collections.
+    template : `lsst.afw.Exposure`
+        warpedExp corresponding to dataId and collections.
+    """
+    #science = butler.get('calexp', dataId=dataId, collections=collections)
+    difference = butler.get(diffName + 'Diff_differenceExp', dataId=dataId, collections=collections)
+    #template = butler.get(diffName + 'Diff_templateExp', dataId=dataId, collections=collections)
+    return difference
+
 
 @deprecated(reason="This method is deprecated and will be removed once the "
                    "replacement API is in place.", version="v24", category=FutureWarning)
@@ -630,6 +660,7 @@ def loadApdbSourcesByBand(dbName, band, dbType='sqlite', schema=None):
                                   '.format('"DiaSource"', "'"+band+"'"),
                                  connection)
     return srcTable
+
 def retrieveCutouts(butler, dataId, collections, center, size=lsst.geom.Extent2I(30, 30), diffName='goodSeeing'):
     """Return small cutout exposures for a science exposure, difference image,
     and warped template.
@@ -665,6 +696,41 @@ def retrieveCutouts(butler, dataId, collections, center, size=lsst.geom.Extent2I
     templateCutout = template.getCutout(center, size)
     return scienceCutout, differenceCutout, templateCutout
 
+def retrieveCutouts2(butler, dataId, collections, center, size=lsst.geom.Extent2I(30, 30), diffName='goodSeeing'):
+    """Return small cutout exposures for a science exposure, difference image,
+    and warped template.
+
+    Parameters
+    ----------
+    butler : `lsst.daf.butler.Butler`
+        Butler in the repository corresponding to the output of an ap_pipe run.
+    dataId : `dict`-like
+        Gen3 data ID specifying at least instrument, visit, and detector.
+    collections : `str` or `list`
+        Gen3 collection or collections from which to load the exposures.
+    center : `lsst.geom.SpherePoint`
+        Desired center coordinate of cutout.
+    size : `lsst.geom.Extent`, optional
+        Desired size of cutout, default is 30x30 pixels
+    diffName : `str`, optional
+        Default is 'deep', but 'goodSeeing' may be needed instead.
+
+    Returns
+    -------
+    scienceCutout : `lsst.afw.Exposure`
+        Cutout of calexp at location 'center' of size 'size'.
+    differenceCutout : `lsst.afw.Exposure`
+        Cutout of diffName_differenceExp at location 'center' of size 'size'.
+    templateCutout : `lsst.afw.Exposure`
+        Cutout of diffName_templateExp at location 'center' of size 'size'.
+    """
+    difference  = loadExposures2(butler, dataId,
+                                              collections, diffName)
+    #scienceCutout = science.getCutout(center, size)
+    differenceCutout = difference.getCutout(center, size)
+    #templateCutout = template.getCutout(center, size)
+    return differenceCutout
+
 
 def plotCutout(scienceCutout, differenceCutout, templateCutout, alpha=0.1, output=None):
     """Plot the cutouts for one DIASource in one image.
@@ -699,6 +765,41 @@ def plotCutout(scienceCutout, differenceCutout, templateCutout, alpha=0.1, outpu
     plt.tight_layout()
 
     if output is not None:
-        plt.savefig(output, bbox_inches="tight")
+        plt.savefig(output, format='png', dpi=500, bbox_inches="tight")
         plt.close()
 
+def plotCutout2(differenceCutout, alpha=0.1, output=None):
+    """Plot the cutouts for one DIASource in one image.
+
+    Parameters
+    ----------
+    scienceCutout : `lsst.afw.Exposure`
+        Cutout of calexp returned by retrieveCutouts.
+    differenceCutout : `lsst.afw.Exposure`
+        Cutout of deepDiff_differenceExp returned by retrieveCutouts.
+    templateCutout : `lsst.afw.Exposure`
+        Cutout of deepDiff_templateExp returned by retrieveCutouts.
+    output : `str`, optional
+        If provided, save png to disk at output filepath.
+    """
+    def do_one(ax, data, name):
+        interval = aviz.ZScaleInterval()
+        if name == 'Difference':
+            norm = aviz.ImageNormalize(data, stretch=aviz.LinearStretch())
+        else:
+            norm = aviz.ImageNormalize(data, interval=interval, stretch=aviz.AsinhStretch(a=alpha))
+        ax.imshow(data, cmap=cm.bone, interpolation="none",norm=norm)
+                  #vmin=np.mean(data)-2*np.std(data)*np.mean(data),
+                 #vmax=np.mean(data)+2*np.std(data)*np.mean(data))
+        ax.axis('off')
+        ax.set_title(name)
+
+    fig, (ax1) = plt.subplots(1, 1)
+    #do_one(ax1, templateCutout.image.array, "Template")
+    #do_one(ax2, scienceCutout.image.array, "Science")
+    do_one(ax3, differenceCutout.image.array, "Difference")
+    plt.tight_layout()
+
+    if output is not None:
+        plt.savefig(output, format='png', dpi=500, bbox_inches="tight")
+        plt.close()
