@@ -144,7 +144,7 @@ def loadSelectApdbSources(dbName, diaObjectId, dbType='sqlite', schema=None):
 
 @deprecated(reason="This method is deprecated and will be removed once the "
                    "replacement API is in place.", version="v24", category=FutureWarning)
-def loadExposuresV2(butler, dataId, collections, diffName='deep'):
+def loadExposures2(butler, dataId, collections, diffName='deep'):
     """Load a science exposure, difference image, and warped template.
 
     Parameters
